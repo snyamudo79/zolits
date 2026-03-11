@@ -96,8 +96,6 @@ class IssueSerializer(serializers.ModelSerializer):
             "issue_number",
             "issue_logged_by",
             "issue_resolved_by",
-            "date_issue_raised",
-            "date_issue_resolved",
             "created_at",
             "updated_at",
         ]
@@ -113,8 +111,9 @@ class IssueSerializer(serializers.ModelSerializer):
         if request and request.user and request.user.is_authenticated:
             validated_data["issue_logged_by"] = request.user
 
-        # set raised timestamp
-        validated_data["date_issue_raised"] = timezone.now()
+        # set raised timestamp if not provided
+        if not validated_data.get("date_issue_raised"):
+            validated_data["date_issue_raised"] = timezone.now()
 
         # uppercase certain fields
         self._apply_uppercase(validated_data)
@@ -150,6 +149,16 @@ class IssueSerializer(serializers.ModelSerializer):
                 issue.issue_resolved_by = request.user
             if not issue.date_issue_resolved:
                 issue.date_issue_resolved = timezone.now()
+            issue.save(update_fields=["issue_resolved_by", "date_issue_resolved"])
+
+        # if moved out of a resolved state, clear resolver/timestamp
+        if (
+            old_status
+            and old_status.is_resolved_state
+            and (not new_status or not new_status.is_resolved_state)
+        ):
+            issue.issue_resolved_by = None
+            issue.date_issue_resolved = None
             issue.save(update_fields=["issue_resolved_by", "date_issue_resolved"])
 
         return issue
