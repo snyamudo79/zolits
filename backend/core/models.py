@@ -59,6 +59,7 @@ class UserProfile(models.Model):
     role = models.ForeignKey(Role, on_delete=models.PROTECT)
     region = models.ForeignKey(Region, on_delete=models.SET_NULL, null=True, blank=True)
     slack_user_id = models.CharField(max_length=100, blank=True)
+    phone_number = models.CharField(max_length=20, blank=True)
 
     def __str__(self) -> str:
         return f"{self.user.get_full_name()} ({self.role.name})"
@@ -101,7 +102,7 @@ class Issue(models.Model):
     release_date = models.DateField(null=True, blank=True)
     tracker = models.CharField(max_length=100, blank=True)
 
-    issue_resolved_by = models.ForeignKey(
+    resolved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
@@ -109,6 +110,7 @@ class Issue(models.Model):
         related_name="issues_resolved",
     )
     date_issue_resolved = models.DateTimeField(null=True, blank=True)
+    screenshot = models.ImageField(upload_to="screenshots/", blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

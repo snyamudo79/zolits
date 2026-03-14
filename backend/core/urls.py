@@ -10,7 +10,7 @@ from .views import (
     IssueViewSet,
     UserViewSet,
 )
-from .auth_views import LoginView
+from .auth_views import LoginView, RegisterView
 
 router = DefaultRouter()
 router.register("regions", RegionViewSet, basename="region")
@@ -23,6 +23,7 @@ router.register("users", UserViewSet, basename="user")
 
 urlpatterns = [
     path("auth/login/", LoginView.as_view(), name="api-login"),
+    path("auth/register/", RegisterView.as_view(), name="api-register"),
     path("", include(router.urls)),
 ]
 

@@ -99,10 +99,43 @@ class IssueAdmin(admin.ModelAdmin):
         "assigned_to",
         "date_issue_raised",
         "date_issue_resolved",
+        "resolved_by",
     ]
-    list_filter = ["region", "severity", "status"]
+    list_filter = ["region", "severity", "status", "resolved_by"]
     search_fields = ["issue_number", "description", "raised_by_name"]
-    readonly_fields = ["issue_number", "date_issue_raised", "date_issue_resolved", "created_at", "updated_at"]
+    readonly_fields = [
+        "issue_number",
+        "date_issue_raised",
+        "date_issue_resolved",
+        "resolved_by",
+        "created_at",
+        "updated_at",
+    ]
+
+    def save_model(self, request, obj, form, change):
+        """
+        When updating via admin, automatically set resolved_by if status changed to resolved.
+        """
+        if change:
+            old_obj = Issue.objects.get(pk=obj.pk)
+            if (
+                obj.status
+                and obj.status.is_resolved_state
+                and (not old_obj.status or not old_obj.status.is_resolved_state)
+            ):
+                obj.resolved_by = request.user
+                from django.utils import timezone
+                if not obj.date_issue_resolved:
+                    obj.date_issue_resolved = timezone.now()
+            elif (
+                old_obj.status
+                and old_obj.status.is_resolved_state
+                and (not obj.status or not obj.status.is_resolved_state)
+            ):
+                obj.resolved_by = None
+                obj.date_issue_resolved = None
+        
+        super().save_model(request, obj, form, change)
     inlines = [AttachmentInline, IssueHistoryInline]
 
 

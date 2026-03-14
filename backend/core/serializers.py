@@ -1,8 +1,12 @@
+import re
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Region, Depot, Module, IssueSeverity, IssueStatus, Issue, Attachment
+from .models import Region, Depot, Module, IssueSeverity, IssueStatus, Issue, Attachment, Role, UserProfile
 from .slack import notify_new_issue
+
+User = get_user_model()
 
 
 UPPERCASE_FIELDS = [
@@ -85,9 +89,10 @@ class IssueSerializer(serializers.ModelSerializer):
             "code",
             "release_date",
             "tracker",
-            "issue_resolved_by",
+            "resolved_by",
             "date_issue_resolved",
             "attachments",
+            "screenshot",
             "created_at",
             "updated_at",
         ]
@@ -95,10 +100,23 @@ class IssueSerializer(serializers.ModelSerializer):
             "id",
             "issue_number",
             "issue_logged_by",
-            "issue_resolved_by",
+            "resolved_by",
             "created_at",
             "updated_at",
         ]
+
+    def validate(self, data):
+        """
+        Custom validation to ensure depot belongs to the selected region.
+        """
+        region = data.get("region")
+        depot = data.get("depot")
+
+        if region and depot and depot.region != region:
+            raise serializers.ValidationError(
+                {"depot": f"Depot '{depot.name}' does not belong to region '{region.name}'."}
+            )
+        return data
 
     def _apply_uppercase(self, validated_data):
         for field in UPPERCASE_FIELDS:
@@ -110,6 +128,13 @@ class IssueSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request and request.user and request.user.is_authenticated:
             validated_data["issue_logged_by"] = request.user
+        else:
+            # Fallback for AllowAny unauthenticated requests
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            default_user = User.objects.first()
+            if default_user:
+                validated_data["issue_logged_by"] = default_user
 
         # set raised timestamp if not provided
         if not validated_data.get("date_issue_raised"):
@@ -146,10 +171,10 @@ class IssueSerializer(serializers.ModelSerializer):
         ):
             request = self.context.get("request")
             if request and request.user and request.user.is_authenticated:
-                issue.issue_resolved_by = request.user
+                issue.resolved_by = request.user
             if not issue.date_issue_resolved:
                 issue.date_issue_resolved = timezone.now()
-            issue.save(update_fields=["issue_resolved_by", "date_issue_resolved"])
+            issue.save(update_fields=["resolved_by", "date_issue_resolved"])
 
         # if moved out of a resolved state, clear resolver/timestamp
         if (
@@ -157,9 +182,61 @@ class IssueSerializer(serializers.ModelSerializer):
             and old_status.is_resolved_state
             and (not new_status or not new_status.is_resolved_state)
         ):
-            issue.issue_resolved_by = None
+            issue.resolved_by = None
             issue.date_issue_resolved = None
-            issue.save(update_fields=["issue_resolved_by", "date_issue_resolved"])
+            issue.save(update_fields=["resolved_by", "date_issue_resolved"])
 
         return issue
 
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    email = serializers.EmailField(required=True)
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all(), required=False)
+    region = serializers.PrimaryKeyRelatedField(queryset=Region.objects.all(), required=False)
+
+    class Meta:
+        model = User
+        fields = ["username", "email", "password", "first_name", "last_name", "role", "region"]
+
+    def validate_email(self, value):
+        if not value.endswith("@zetdc.co.zw"):
+            raise serializers.ValidationError("Email must belong to the domain @zetdc.co.zw")
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def validate_username(self, value):
+        # normalize username by adding prefix if missing
+        username = value.lower()
+        if not username.startswith("ze"):
+            username = f"ze{username}"
+        
+        # validate it is ze followed by digits
+        if not re.match(r"^ze\d+$", username):
+            raise serializers.ValidationError("Username must start with 'ze' followed by digits.")
+        
+        if User.objects.filter(username=username).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        
+        return username
+
+    def create(self, validated_data):
+        role = validated_data.pop("role", None)
+        region = validated_data.pop("region", None)
+        
+        password = validated_data.pop("password")
+        user = User.objects.create(**validated_data)
+        user.set_password(password)
+        user.save()
+
+        # Create profile
+        if not role:
+            # default to ENDUSER
+            role, _ = Role.objects.get_or_create(name="ENDUSER")
+        
+        UserProfile.objects.create(user=user, role=role, region=region)
+        
+        return user

@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions, status, parsers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -20,31 +20,31 @@ User = get_user_model()
 class RegionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 
 class DepotViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Depot.objects.select_related("region").all()
     serializer_class = DepotSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 
 class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Module.objects.all()
     serializer_class = ModuleSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 
 class IssueSeverityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IssueSeverity.objects.all()
     serializer_class = IssueSeveritySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 
 class IssueStatusViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IssueStatus.objects.all()
     serializer_class = IssueStatusSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
 
 class IssueViewSet(viewsets.ModelViewSet):
@@ -57,13 +57,13 @@ class IssueViewSet(viewsets.ModelViewSet):
             "status",
             "assigned_to",
             "issue_logged_by",
-            "issue_resolved_by",
+            "resolved_by",
         )
         .prefetch_related("attachments")
         .all()
     )
     serializer_class = IssueSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def list(self, request, *args, **kwargs):
         """
@@ -75,9 +75,9 @@ class IssueViewSet(viewsets.ModelViewSet):
         data = []
         for issue in queryset:
             resolved_by_name = (
-                issue.issue_resolved_by.get_full_name()
-                or issue.issue_resolved_by.username
-                if issue.issue_resolved_by
+                issue.resolved_by.get_full_name()
+                or issue.resolved_by.username
+                if issue.resolved_by
                 else ""
             )
             logged_by_name = (
@@ -107,18 +107,27 @@ class IssueViewSet(viewsets.ModelViewSet):
                         {"id": a.id, "file": request.build_absolute_uri(a.file.url), "uploaded_at": a.uploaded_at}
                         for a in attachments
                     ],
+                    "screenshot_url": request.build_absolute_uri(issue.screenshot.url) if issue.screenshot else None,
                 }
             )
         return Response(data)
 
-    @action(detail=True, methods=["post"], url_path="attachments")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="attachments",
+        parser_classes=[parsers.MultiPartParser, parsers.FormParser, parsers.FileUploadParser],
+    )
     def upload_attachment(self, request, pk=None):
         issue = self.get_object()
         file = request.FILES.get("file")
         if not file:
             return Response({"detail": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
 
-        attachment = Attachment.objects.create(issue=issue, file=file, uploaded_by=request.user)
+        # Handle uploaded_by for unauthenticated users
+        uploaded_by = request.user if request.user.is_authenticated else None
+
+        attachment = Attachment.objects.create(issue=issue, file=file, uploaded_by=uploaded_by)
         serializer = AttachmentSerializer(attachment, context={"request": request})
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -138,6 +147,23 @@ class IssueViewSet(viewsets.ModelViewSet):
         serializer.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="screenshot",
+        parser_classes=[parsers.MultiPartParser, parsers.FormParser, parsers.FileUploadParser],
+    )
+    def upload_screenshot(self, request, pk=None):
+        issue = self.get_object()
+        screenshot = request.FILES.get("screenshot")
+        if not screenshot:
+            return Response({"detail": "No screenshot uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+
+        issue.screenshot = screenshot
+        issue.save()
+        serializer = self.get_serializer(issue)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -146,7 +172,7 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     queryset = User.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def list(self, request, *args, **kwargs):
         users = self.get_queryset()

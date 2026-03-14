@@ -21,7 +21,7 @@ class Command(BaseCommand):
         parser.add_argument("--with-sample-users", action="store_true", help="Create sample expert and regional manager users")
 
     def handle(self, *args, **options):
-        roles = ["ADMIN", "REGIONAL_MANAGER", "EXPERT"]
+        roles = ["ADMIN", "REGIONAL_MANAGER", "EXPERT", "ENDUSER"]
         for r in roles:
             Role.objects.get_or_create(name=r)
 
