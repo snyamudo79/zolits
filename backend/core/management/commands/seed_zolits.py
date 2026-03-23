@@ -34,7 +34,7 @@ class Command(BaseCommand):
         for depot_name in ["GWERU", "KWEKWE", "ZVISHAVANE"]:
             Depot.objects.get_or_create(region=southern, name=depot_name)
 
-        for module_name in ["CRM", "SMART VEND", "ZUMS", "CONTRACTING", "TARIFF CHANGE", "ALL"]:
+        for module_name in ["CRM", "SMART VEND", "ZUMS", "CONTRACTING", "TARIFF CHANGE"]:
             Module.objects.get_or_create(name=module_name)
 
         severities = [

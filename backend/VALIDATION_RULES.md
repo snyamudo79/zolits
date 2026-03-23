@@ -65,18 +65,20 @@
   "region": 1,
   "depot": 2,
   "module": 1,
-  "functionality": "Login System",
   "description": "USER CANNOT LOGIN WITH CORRECT CREDENTIALS",
   "raised_by_name": "John Smith",
   "contact_phone": "+263 712 345 678",
-  "severity": 1,
-  "status": 1
+  "severity": 1
 }
 ```
 
 ---
 
 ## 3. Issue Resolution (Auto-Stamping)
+
+### Initial Status
+- **Rule**: When an issue is created from the frontend, the `status` is automatically set to `PENDING`.
+- **Note**: Users are not required to provide a `status` in the request body. If provided, it will be ignored.
 
 ### When Issue is Marked as Resolved
 When an issue's status is changed to a resolved state:

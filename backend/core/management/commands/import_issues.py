@@ -133,11 +133,22 @@ class Command(BaseCommand):
                 region = self._get_or_create_region(region_name)
                 region_cache[region_name] = region
 
-            # Per instruction, do not take depot from source; use UNSPECIFIED in the region
-            depot = depot_cache.get((region.id, "UNSPECIFIED"))
+            # Try to get depot from source, or use first available in the region
+            depot_name = self._upper(gv(["depot"]))
+            depot = None
+            if depot_name:
+                depot = depot_cache.get((region.id, depot_name))
+                if not depot:
+                    depot = Depot.objects.filter(region=region, name=depot_name).first()
+                    if depot:
+                        depot_cache[(region.id, depot_name)] = depot
+
             if not depot:
-                depot = Depot.objects.get_or_create(region=region, name="UNSPECIFIED")[0]
-                depot_cache[(region.id, "UNSPECIFIED")] = depot
+                depot = Depot.objects.filter(region=region).first()
+            
+            if not depot:
+                skipped += 1
+                continue
 
             module = module_cache.get(module_name)
             if not module:
@@ -165,8 +176,9 @@ class Command(BaseCommand):
                     issue_number=issue_number,
                     region=region,
                     depot=depot,
+                    system=None,
                     module=module,
-                    functionality="",  # not provided by source mapping
+                    submodule=None,
                     description=description,
                     raised_by_name="",  # not provided by source mapping
                     contact_phone="",

@@ -40,7 +40,15 @@ class LoginView(APIView):
         if not user:
             return Response({"detail": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
 
-        token, _ = Token.objects.get_or_create(user=user)
+        token, created = Token.objects.get_or_create(user=user)
+        if not created:
+            # If token already exists, check if it's expired
+            from django.utils import timezone
+            from datetime import timedelta
+            if token.created < timezone.now() - timedelta(minutes=30):
+                token.delete()
+                token = Token.objects.create(user=user)
+        
         return Response(
             {
                 "token": token.key,

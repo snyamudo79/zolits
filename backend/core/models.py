@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Substr, Cast
+from django.db.models import Max, IntegerField
 
 
 class Role(models.Model):
@@ -28,11 +30,33 @@ class Depot(models.Model):
         return f"{self.name} ({self.region.code})"
 
 
-class Module(models.Model):
+class System(models.Model):
     name = models.CharField(max_length=100, unique=True)
 
     def __str__(self) -> str:
         return self.name
+
+
+class Module(models.Model):
+    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="modules", null=True, blank=True)
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ("system", "name")
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.system.name})"
+
+
+class Submodule(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="submodules")
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ("module", "name")
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.module.name})"
 
 
 class IssueSeverity(models.Model):
@@ -69,9 +93,10 @@ class Issue(models.Model):
     issue_number = models.CharField(max_length=20, unique=True)
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name="issues")
     depot = models.ForeignKey(Depot, on_delete=models.PROTECT, related_name="issues")
-    module = models.ForeignKey(Module, on_delete=models.PROTECT, related_name="issues")
+    system = models.ForeignKey(System, on_delete=models.PROTECT, related_name="issues", null=True, blank=True)
+    module = models.ForeignKey(Module, on_delete=models.PROTECT, related_name="issues", null=True, blank=True)
+    submodule = models.ForeignKey(Submodule, on_delete=models.PROTECT, related_name="issues", null=True, blank=True)
 
-    functionality = models.CharField(max_length=255)
     description = models.TextField()
 
     raised_by_name = models.CharField(max_length=255)
@@ -98,9 +123,6 @@ class Issue(models.Model):
     resolution_notes = models.TextField(blank=True)
     zetdc_comments = models.TextField(blank=True)
     longshine_comments = models.TextField(blank=True)
-    code = models.CharField(max_length=100, blank=True)
-    release_date = models.DateField(null=True, blank=True)
-    tracker = models.CharField(max_length=100, blank=True)
 
     resolved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -112,9 +134,6 @@ class Issue(models.Model):
     date_issue_resolved = models.DateTimeField(null=True, blank=True)
     screenshot = models.ImageField(upload_to="screenshots/", blank=True, null=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     class Meta:
         ordering = ["-date_issue_raised"]
 
@@ -125,23 +144,29 @@ class Issue(models.Model):
     def generate_issue_number_for_region(region: Region) -> str:
         """
         Generate the next issue number for a given region, following the pattern
-        like SU32, SU101, etc., where Region.code is the prefix (e.g. "SU").
+        like SU0, SU1, etc., where Region.code is the prefix (e.g. "SU").
+
+        This method is robust and safe for concurrent operations.
         """
         prefix = (region.code or "").upper()
         if not prefix:
             raise ValueError("Region.code must be set to generate issue number")
 
-        last_issue = (
+        # Find the highest existing number for the given prefix
+        last_number = (
             Issue.objects.filter(issue_number__startswith=prefix)
-            .order_by("-id")
-            .first()
+            .annotate(
+                numeric_part=Cast(
+                    Substr("issue_number", len(prefix) + 1),
+                    output_field=IntegerField(),
+                )
+            )
+            .aggregate(max_numeric_part=Max("numeric_part"))["max_numeric_part"]
         )
-        if last_issue and last_issue.issue_number[len(prefix) :].isdigit():
-            last_number = int(last_issue.issue_number[len(prefix) :])
-        else:
-            last_number = 0
 
-        next_number = last_number + 1
+        # If no issues exist for this region, start at 0, otherwise increment
+        next_number = 0 if last_number is None else last_number + 1
+
         return f"{prefix}{next_number}"
 
 

@@ -20,31 +20,26 @@ User = get_user_model()
 class RegionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class DepotViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Depot.objects.select_related("region").all()
     serializer_class = DepotSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Module.objects.all()
     serializer_class = ModuleSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class IssueSeverityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IssueSeverity.objects.all()
     serializer_class = IssueSeveritySerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class IssueStatusViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IssueStatus.objects.all()
     serializer_class = IssueStatusSerializer
-    permission_classes = [permissions.AllowAny]
 
 
 class IssueViewSet(viewsets.ModelViewSet):
@@ -63,7 +58,6 @@ class IssueViewSet(viewsets.ModelViewSet):
         .all()
     )
     serializer_class = IssueSerializer
-    permission_classes = [permissions.AllowAny]
 
     def list(self, request, *args, **kwargs):
         """
@@ -172,7 +166,6 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     queryset = User.objects.all()
-    permission_classes = [permissions.AllowAny]
 
     def list(self, request, *args, **kwargs):
         users = self.get_queryset()

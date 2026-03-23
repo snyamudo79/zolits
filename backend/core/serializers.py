@@ -3,18 +3,23 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Region, Depot, Module, IssueSeverity, IssueStatus, Issue, Attachment, Role, UserProfile
+from .models import Region, Depot, System, Module, Submodule, IssueSeverity, IssueStatus, Issue, Attachment, Role, UserProfile
 from .slack import notify_new_issue
 
 User = get_user_model()
 
 
 UPPERCASE_FIELDS = [
-    "functionality",
     "description",
     "raised_by_name",
     "resolution_notes",
 ]
+
+
+class SystemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = System
+        fields = ["id", "name"]
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -32,9 +37,19 @@ class DepotSerializer(serializers.ModelSerializer):
 
 
 class ModuleSerializer(serializers.ModelSerializer):
+    system = SystemSerializer(read_only=True)
+
     class Meta:
         model = Module
-        fields = ["id", "name"]
+        fields = ["id", "name", "system"]
+
+
+class SubmoduleSerializer(serializers.ModelSerializer):
+    module = ModuleSerializer(read_only=True)
+
+    class Meta:
+        model = Submodule
+        fields = ["id", "name", "module"]
 
 
 class IssueSeveritySerializer(serializers.ModelSerializer):
@@ -73,8 +88,9 @@ class IssueSerializer(serializers.ModelSerializer):
             "issue_number",
             "region",
             "depot",
+            "system",
             "module",
-            "functionality",
+            "submodule",
             "description",
             "raised_by_name",
             "contact_phone",
@@ -86,37 +102,33 @@ class IssueSerializer(serializers.ModelSerializer):
             "resolution_notes",
             "zetdc_comments",
             "longshine_comments",
-            "code",
-            "release_date",
-            "tracker",
             "resolved_by",
             "date_issue_resolved",
             "attachments",
             "screenshot",
-            "created_at",
-            "updated_at",
         ]
         read_only_fields = [
             "id",
             "issue_number",
             "issue_logged_by",
             "resolved_by",
-            "created_at",
-            "updated_at",
         ]
 
-    def validate(self, data):
-        """
-        Custom validation to ensure depot belongs to the selected region.
-        """
-        region = data.get("region")
-        depot = data.get("depot")
-
-        if region and depot and depot.region != region:
-            raise serializers.ValidationError(
-                {"depot": f"Depot '{depot.name}' does not belong to region '{region.name}'."}
-            )
-        return data
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['region'] = RegionSerializer(instance.region).data if instance.region else None
+        representation['depot'] = DepotSerializer(instance.depot).data if instance.depot else None
+        representation['system'] = SystemSerializer(instance.system).data if instance.system else None
+        representation['module'] = ModuleSerializer(instance.module).data if instance.module else None
+        representation['submodule'] = SubmoduleSerializer(instance.submodule).data if instance.submodule else None
+        representation['severity'] = IssueSeveritySerializer(instance.severity).data if instance.severity else None
+        representation['status'] = IssueStatusSerializer(instance.status).data if instance.status else None
+        representation['issue_logged_by'] = instance.issue_logged_by.get_full_name() or instance.issue_logged_by.username
+        if instance.assigned_to:
+            representation['assigned_to'] = instance.assigned_to.get_full_name() or instance.assigned_to.username
+        if instance.resolved_by:
+            representation['resolved_by'] = instance.resolved_by.get_full_name() or instance.resolved_by.username
+        return representation
 
     def _apply_uppercase(self, validated_data):
         for field in UPPERCASE_FIELDS:
@@ -147,6 +159,10 @@ class IssueSerializer(serializers.ModelSerializer):
         region = validated_data.get("region")
         if region:
             validated_data["issue_number"] = Issue.generate_issue_number_for_region(region)
+
+        # Set default status to 'PENDING'
+        pending_status, _ = IssueStatus.objects.get_or_create(name="PENDING")
+        validated_data["status"] = pending_status
 
         issue = super().create(validated_data)
 

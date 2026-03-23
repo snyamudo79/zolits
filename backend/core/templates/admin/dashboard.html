@@ -1,0 +1,167 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrahead %}
+{{ block.super }}
+<!-- Highcharts scripts for 3D support -->
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://code.highcharts.com/highcharts-3d.js"></script>
+<script src="https://code.highcharts.com/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/modules/export-data.js"></script>
+<script src="https://code.highcharts.com/modules/accessibility.js"></script>
+
+<style>
+    .dashboard-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        padding: 20px;
+        background-color: #f4f7f6;
+    }
+    .chart-card {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 20px;
+        width: 100%;
+        max-width: 460px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+    .chart-card:hover {
+        transform: translateY(-5px);
+    }
+    .chart-card h2 {
+        margin-top: 0;
+        text-align: center;
+        color: #2c3e50;
+        font-weight: 600;
+        border-bottom: 2px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+    }
+    .report-info {
+        text-align: center;
+        font-size: 0.85em;
+        color: #7f8c8d;
+        margin-bottom: 15px;
+        font-style: italic;
+    }
+    .full-width {
+        max-width: 940px;
+    }
+    .highcharts-container {
+        width: 100%;
+        height: 400px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1 style="margin-left: 20px; color: #f3ef09;">ZETDC OPERTATIONS LIVE ISSUES TRACKING SYSTEM ACTIVITY & HEALTH SUMMARY.</h1>
+    
+    <div class="dashboard-container">
+        <!-- Overall Status - 3D Doughnut -->
+        <div class="chart-card full-width">
+            <h2>Overall System Health (All Issues)</h2>
+            <div class="report-info">Summary of all issues currently in the system</div>
+            <div id="overallChart" class="highcharts-container"></div>
+        </div>
+
+        <!-- Daily Report - 3D Pie -->
+        <div class="chart-card">
+            <h2>Daily Activity Breakdown</h2>
+            <div class="report-info">Data for: {{ daily_date|date:"F d, Y" }}</div>
+            <div id="dailyChart" class="highcharts-container"></div>
+        </div>
+
+        <!-- Weekly Report - 3D Column -->
+        <div class="chart-card">
+            <h2>Weekly Performance</h2>
+            <div class="report-info">Week ending: {{ weekly_date|date:"F d, Y" }}</div>
+            <div id="weeklyChart" class="highcharts-container"></div>
+        </div>
+
+        <!-- Monthly Report - 3D Column -->
+        <div class="chart-card full-width">
+            <h2>Monthly Regional Distribution</h2>
+            <div class="report-info">Month: {{ monthly_date|date:"F Y" }}</div>
+            <div id="monthlyChart" class="highcharts-container"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. Overall System Health - 3D Doughnut
+    Highcharts.chart('overallChart', {
+        chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+        title: { text: null },
+        plotOptions: {
+            pie: {
+                innerSize: 100,
+                depth: 45,
+                dataLabels: { enabled: true, format: '<b>{point.name}</b>: {point.y}' }
+            }
+        },
+        series: [{ name: 'Issues', data: {{ overall_data|safe }} }],
+        credits: { enabled: false }
+    });
+
+    // 2. Daily Report - 3D Pie
+    Highcharts.chart('dailyChart', {
+        chart: { type: 'pie', options3d: { enabled: true, alpha: 45, beta: 0 } },
+        title: { text: null },
+        plotOptions: {
+            pie: {
+                allowPointSelect: true,
+                cursor: 'pointer',
+                depth: 35,
+                dataLabels: { enabled: true, format: '{point.name}: {point.y}' }
+            }
+        },
+        series: [{ name: 'Issues', data: {{ daily_data|safe }} }],
+        credits: { enabled: false }
+    });
+
+    // 3. Weekly Report - 3D Column
+    Highcharts.chart('weeklyChart', {
+        chart: { type: 'column', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+        title: { text: null },
+        xAxis: { categories: {{ weekly_labels|safe }}, labels: { skew3d: true, style: { fontSize: '12px' } } },
+        yAxis: { title: { text: 'Number of Issues', margin: 20 } },
+        plotOptions: {
+            column: {
+                depth: 25,
+                colorByPoint: true
+            }
+        },
+        series: [{
+            name: 'Issues',
+            data: {{ weekly_data|safe }},
+            showInLegend: false
+        }],
+        credits: { enabled: false }
+    });
+
+    // 4. Monthly Report - 3D Column
+    Highcharts.chart('monthlyChart', {
+        chart: { type: 'column', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+        title: { text: null },
+        xAxis: { categories: {{ monthly_labels|safe }}, labels: { skew3d: true, style: { fontSize: '12px' } } },
+        yAxis: { title: { text: 'Total Issues', margin: 20 } },
+        plotOptions: {
+            column: {
+                depth: 40,
+                colorByPoint: true
+            }
+        },
+        series: [{
+            name: 'Issues',
+            data: {{ monthly_data|safe }},
+            showInLegend: false
+        }],
+        credits: { enabled: false }
+    });
+</script>
+{% endblock %}
