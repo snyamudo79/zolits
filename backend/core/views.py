@@ -3,16 +3,29 @@ from rest_framework import viewsets, permissions, status, parsers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Region, Depot, Module, IssueSeverity, IssueStatus, Issue, Attachment
+from .models import (
+    Region,
+    Depot,
+    System,
+    Module,
+    Submodule,
+    IssueSeverity,
+    IssueStatus,
+    Issue,
+    Attachment,
+)
 from .serializers import (
     RegionSerializer,
     DepotSerializer,
+    SystemSerializer,
     ModuleSerializer,
+    SubmoduleSerializer,
     IssueSeveritySerializer,
     IssueStatusSerializer,
     IssueSerializer,
     AttachmentSerializer,
 )
+from .permissions import IsSuperUserOrUser
 
 User = get_user_model()
 
@@ -20,50 +33,74 @@ User = get_user_model()
 class RegionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsSuperUserOrUser]
 
 
 class DepotViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Depot.objects.select_related("region").all()
     serializer_class = DepotSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsSuperUserOrUser]
+
+
+class SystemViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = System.objects.all()
+    serializer_class = SystemSerializer
+    permission_classes = [IsSuperUserOrUser]
 
 
 class ModuleViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Module.objects.all()
+    queryset = Module.objects.select_related("system").all()
     serializer_class = ModuleSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsSuperUserOrUser]
+
+
+class SubmoduleViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Submodule.objects.select_related("module").all()
+    serializer_class = SubmoduleSerializer
+    permission_classes = [IsSuperUserOrUser]
 
 
 class IssueSeverityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IssueSeverity.objects.all()
     serializer_class = IssueSeveritySerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsSuperUserOrUser]
 
 
 class IssueStatusViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = IssueStatus.objects.all()
     serializer_class = IssueStatusSerializer
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsSuperUserOrUser]
 
 
 class IssueViewSet(viewsets.ModelViewSet):
-    queryset = (
-        Issue.objects.select_related(
+    serializer_class = IssueSerializer
+    permission_classes = [IsSuperUserOrUser]
+
+    def get_queryset(self):
+        queryset = Issue.objects.select_related(
             "region",
             "depot",
+            "system",
             "module",
+            "submodule",
             "severity",
             "status",
             "assigned_to",
             "issue_logged_by",
             "resolved_by",
-        )
-        .prefetch_related("attachments")
-        .all()
-    )
-    serializer_class = IssueSerializer
-    permission_classes = [permissions.AllowAny]
+        ).prefetch_related("attachments")
+
+        # Superusers can see everything
+        try:
+            role_name = self.request.user.profile.role.name
+        except AttributeError:
+            role_name = None
+
+        if self.request.user.is_superuser or role_name == "SUPERUSER":
+            return queryset.all()
+
+        # Normal users only see issues they logged
+        return queryset.filter(issue_logged_by=self.request.user)
 
     def list(self, request, *args, **kwargs):
         """
@@ -172,7 +209,7 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """
 
     queryset = User.objects.all()
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [IsSuperUserOrUser]
 
     def list(self, request, *args, **kwargs):
         users = self.get_queryset()

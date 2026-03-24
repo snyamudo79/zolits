@@ -3,7 +3,19 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Region, Depot, Module, IssueSeverity, IssueStatus, Issue, Attachment, Role, UserProfile
+from .models import (
+    Region,
+    Depot,
+    System,
+    Module,
+    Submodule,
+    IssueSeverity,
+    IssueStatus,
+    Issue,
+    Attachment,
+    Role,
+    UserProfile,
+)
 from .slack import notify_new_issue
 
 User = get_user_model()
@@ -31,10 +43,22 @@ class DepotSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "region"]
 
 
+class SystemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = System
+        fields = ["id", "name"]
+
+
 class ModuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Module
-        fields = ["id", "name"]
+        fields = ["id", "system", "name"]
+
+
+class SubmoduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Submodule
+        fields = ["id", "module", "name"]
 
 
 class IssueSeveritySerializer(serializers.ModelSerializer):
@@ -64,6 +88,15 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 
 class IssueSerializer(serializers.ModelSerializer):
+    region_name = serializers.ReadOnlyField(source="region.name")
+    depot_name = serializers.ReadOnlyField(source="depot.name")
+    system_name = serializers.ReadOnlyField(source="system.name")
+    module_name = serializers.ReadOnlyField(source="module.name")
+    submodule_name = serializers.ReadOnlyField(source="submodule.name")
+    severity_name = serializers.ReadOnlyField(source="severity.name")
+    status_name = serializers.ReadOnlyField(source="status.name")
+    assigned_to_name = serializers.ReadOnlyField(source="assigned_to.get_full_name")
+    resolved_by_name = serializers.ReadOnlyField(source="resolved_by.get_full_name")
     attachments = AttachmentSerializer(many=True, read_only=True)
 
     class Meta:
@@ -72,16 +105,26 @@ class IssueSerializer(serializers.ModelSerializer):
             "id",
             "issue_number",
             "region",
+            "region_name",
             "depot",
+            "depot_name",
+            "system",
+            "system_name",
             "module",
+            "module_name",
+            "submodule",
+            "submodule_name",
             "functionality",
             "description",
             "raised_by_name",
             "contact_phone",
             "issue_logged_by",
             "assigned_to",
+            "assigned_to_name",
             "severity",
+            "severity_name",
             "status",
+            "status_name",
             "date_issue_raised",
             "resolution_notes",
             "zetdc_comments",
@@ -90,6 +133,7 @@ class IssueSerializer(serializers.ModelSerializer):
             "release_date",
             "tracker",
             "resolved_by",
+            "resolved_by_name",
             "date_issue_resolved",
             "attachments",
             "screenshot",
@@ -234,8 +278,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         # Create profile
         if not role:
-            # default to ENDUSER
-            role, _ = Role.objects.get_or_create(name="ENDUSER")
+            # default to USER as requested
+            role, _ = Role.objects.get_or_create(name="USER")
         
         UserProfile.objects.create(user=user, role=role, region=region)
         

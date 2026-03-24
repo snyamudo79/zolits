@@ -21,10 +21,11 @@ class Command(BaseCommand):
         parser.add_argument("--with-sample-users", action="store_true", help="Create sample expert and regional manager users")
 
     def handle(self, *args, **options):
-        roles = ["ADMIN", "REGIONAL_MANAGER", "EXPERT", "ENDUSER"]
+        roles = ["SUPERUSER", "USER"]
         for r in roles:
             Role.objects.get_or_create(name=r)
 
+        # Ensure reference data for testing
         southern, _ = Region.objects.get_or_create(name="SOUTHERN", defaults={"code": "SU"})
         # Ensure code exists/updated
         if southern.code != "SU":
@@ -57,32 +58,32 @@ class Command(BaseCommand):
             IssueStatus.objects.get_or_create(name=name, defaults={"is_resolved_state": is_resolved})
 
         if options.get("with_sample_users"):
-            admin_role = Role.objects.get(name="ADMIN")
-            expert_role = Role.objects.get(name="EXPERT")
-            rm_role = Role.objects.get(name="REGIONAL_MANAGER")
+            superuser_role = Role.objects.get(name="SUPERUSER")
+            user_role = Role.objects.get(name="USER")
 
-            # expert
-            expert, created = User.objects.get_or_create(username="expert1", defaults={"email": "expert1@example.com"})
+            # user
+            user, created = User.objects.get_or_create(username="user1", defaults={"email": "user1@example.com"})
             if created:
-                expert.set_password("Password123!")
-                expert.first_name = "Expert"
-                expert.last_name = "One"
-                expert.save()
-            UserProfile.objects.get_or_create(user=expert, defaults={"role": expert_role})
+                user.set_password("Password123!")
+                user.first_name = "Normal"
+                user.last_name = "User"
+                user.save()
+            UserProfile.objects.get_or_create(user=user, defaults={"role": user_role})
 
-            # regional manager
-            rm, created = User.objects.get_or_create(username="rm_southern", defaults={"email": "rm_southern@example.com"})
+            # superuser (staff)
+            admin, created = User.objects.get_or_create(username="admin1", defaults={"email": "admin1@example.com"})
             if created:
-                rm.set_password("Password123!")
-                rm.first_name = "Regional"
-                rm.last_name = "Manager"
-                rm.save()
-            UserProfile.objects.get_or_create(user=rm, defaults={"role": rm_role, "region": southern})
+                admin.set_password("Password123!")
+                admin.first_name = "Admin"
+                admin.last_name = "User"
+                admin.is_staff = True
+                admin.save()
+            UserProfile.objects.get_or_create(user=admin, defaults={"role": superuser_role})
 
-            # If a superuser exists without a profile, link as ADMIN (best-effort)
+            # If a superuser exists without a profile, link as SUPERUSER
             superusers = User.objects.filter(is_superuser=True)
             for su in superusers:
-                UserProfile.objects.get_or_create(user=su, defaults={"role": admin_role})
+                UserProfile.objects.get_or_create(user=su, defaults={"role": superuser_role})
 
             self.stdout.write(self.style.SUCCESS("Seeded reference data + sample users"))
         else:

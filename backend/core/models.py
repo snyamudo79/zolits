@@ -28,11 +28,30 @@ class Depot(models.Model):
         return f"{self.name} ({self.region.code})"
 
 
-class Module(models.Model):
+class System(models.Model):
     name = models.CharField(max_length=100, unique=True)
 
     def __str__(self) -> str:
         return self.name
+
+
+class Module(models.Model):
+    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name="modules", null=True, blank=True)
+    name = models.CharField(max_length=100, unique=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Submodule(models.Model):
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="submodules")
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ("module", "name")
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.module.name})"
 
 
 class IssueSeverity(models.Model):
@@ -69,7 +88,9 @@ class Issue(models.Model):
     issue_number = models.CharField(max_length=20, unique=True)
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name="issues")
     depot = models.ForeignKey(Depot, on_delete=models.PROTECT, related_name="issues")
+    system = models.ForeignKey(System, on_delete=models.SET_NULL, null=True, blank=True, related_name="issues")
     module = models.ForeignKey(Module, on_delete=models.PROTECT, related_name="issues")
+    submodule = models.ForeignKey(Submodule, on_delete=models.SET_NULL, null=True, blank=True, related_name="issues")
 
     functionality = models.CharField(max_length=255)
     description = models.TextField()

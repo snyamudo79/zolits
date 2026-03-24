@@ -6,7 +6,9 @@ from .models import (
     Role,
     Region,
     Depot,
+    System,
     Module,
+    Submodule,
     IssueSeverity,
     IssueStatus,
     UserProfile,
@@ -16,6 +18,17 @@ from .models import (
 )
 
 User = get_user_model()
+
+
+@admin.register(System)
+class SystemAdmin(admin.ModelAdmin):
+    list_display = ["name"]
+
+
+@admin.register(Submodule)
+class SubmoduleAdmin(admin.ModelAdmin):
+    list_display = ["name", "module"]
+    list_filter = ["module"]
 
 
 @admin.register(Role)
@@ -93,7 +106,9 @@ class IssueAdmin(admin.ModelAdmin):
         "issue_number",
         "region",
         "depot",
+        "system",
         "module",
+        "submodule",
         "severity",
         "status",
         "assigned_to",
@@ -101,7 +116,7 @@ class IssueAdmin(admin.ModelAdmin):
         "date_issue_resolved",
         "resolved_by",
     ]
-    list_filter = ["region", "severity", "status", "resolved_by"]
+    list_filter = ["region", "system", "module", "severity", "status", "resolved_by"]
     search_fields = ["issue_number", "description", "raised_by_name"]
     readonly_fields = [
         "issue_number",
